@@ -1,8 +1,13 @@
 import cv2, os
 import numpy as np
 
-# Compare les images de ImagesTMP à celle de Image pour trouver des doublons
-# A lancer à la main
+""""
+Compare les images de ImagesTMP à celle de Image pour vérifier si ce sont des doublons
+A lancer à la main
+Necessite de recharger la DB du gastronobot
+A mettre dans le Bot plus tard 
+"""
+
 
 ImagesTMP = os.listdir('..\\ImagesTMP')
 ImagesDB = os.listdir('..\\Images')

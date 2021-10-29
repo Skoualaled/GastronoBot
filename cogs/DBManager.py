@@ -85,7 +85,7 @@ class DBManager(commands.Cog):
         print("DB générée")
 
 
-    # Sur upload d'une image, on la DL
+    # Sur upload d'une image, on la DL dans ImagesTMP
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author == self.bot.user:

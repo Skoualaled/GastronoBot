@@ -1,7 +1,7 @@
 import discord
 
 """ 
-Admin : Gestion des admin
+Admin : Gestion des admin lié à une instance de Bot
 
 >>> Objets
 

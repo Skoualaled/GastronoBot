@@ -12,6 +12,9 @@ from discord.ext import commands
 """
 ----------------------------------------------------------
 EnferGastro 
+
+Classe qui gère les marathons
+
 >>> Objets
  - auth 		(bool)		: booléen pour authorisation du marathon
  - NbImg		(int)		: Nombre d'image du marathon
@@ -100,17 +103,17 @@ class EnferGastro(commands.Cog):
 	)
 	async def LastImgInfo(self, ctx):
 		if self.LastSend == None:
-			await ctx.send('Aucune Image en mémroire ...')
+			await ctx.send('Aucune Image en mémoire ...')
 		else:
 			Item = self.data[self.LastSend]
 			await ctx.send('``` \nType : '+ Item['type']
-			+ '\nURL : < ' + Item['url']+ '> \n ```')
+			+ '\nNom/URL : < ' + Item['url']+ ' > \n ```')
 
-	# Renvoi durée actuelle ou la défini, ou défini une nouvelle durée si time est mis à 0
+	# Renvoi durée du marathon actuelle, ou défini une nouvelle durée si time est mis à 0
 	# time (int) :
 	# 	- None -> Renvoie les info lié à la durée
 	#   - Sinon défini la durée en seconde
-	#   - Si le délai trop court ou si time n'est pas un entier  on renvoi un message d'alerte (5 seconde en dur)
+	#   - Si le délai trop court ou si time n'est pas un entier on renvoi un message d'alerte (5 seconde en dur)
 	@commands.command(
 		name='Duree',
 		brief='Renvoi ou défini duree marathon'
@@ -118,12 +121,14 @@ class EnferGastro(commands.Cog):
 	async def Duree(self, ctx, time=None):
 		if time==None:
 			if self.duree > 1 :
-				await ctx.send('Duree prévu du marathon : ' + str(self.duree) + ' Heure')
-			else: 
 				await ctx.send('Duree prévu du marathon : ' + str(self.duree) + ' Heures')
+			else: 
+				await ctx.send('Duree prévu du marathon : ' + str(self.duree) + ' Heure')
 			await ctx.send('Délai entre chaque monstruosité : ' + str(self.get_delai()) + ' secondes')
-		elif (time * 3600 / self.NbImg) < 5 or type(time) is str:
-			await ctx.send('Bien essayé mais non. Je limite le délai entre chaque image à 5sec\nLa durée minimum que j\'authorise est de ' + str(round((self.NbImg * 5) / 3600),2)+ ' heures (environ)')
+		elif (time * 3600 / self.NbImg) < 5:
+			await ctx.send('Bien essayé mais non. Je limite le délai entre chaque image à 5sec\nLa durée minimum que j\'authorise est de ' + str(round((self.NbImg * 5) / 3600),2)+ ' heures (calculé en onction du nombre d\'images)\nLe temps à mettre en paramètre est en heures.')
+		elif type(time) is str:
+			await ctx.send('Il faut rentrer un nombre pour que ça marche ...')
 		elif await self.is_admin(ctx):
 			self.duree = time
 			self.delai = time * 3600 / self.NbImg
@@ -134,7 +139,7 @@ class EnferGastro(commands.Cog):
 			await ctx.send('Délai entre chaque monstruosité : ' + str(self.get_delai()) + ' secondes')
 
 	# Infos générales :
-	# Authorisation, nombre d'image et délai
+	# Authorisation du lancement du marathon, nombre d'images et délai
 	@commands.command(
 		name='getInfo',
 		brief='Infos marathon'
@@ -150,26 +155,25 @@ class EnferGastro(commands.Cog):
                 description='Vision d\'horreur aléatoire',
                 brief='( ͡° ͜ʖ ͡°)')
 	async def oskour(self, ctx):
-		# channel = self.bot.get_channel(585160113132666904)
 		rng = random.randint(0, self.NbImg)
 		Item = self.data[rng]
 		await self.GastroMessage(ctx, Item, rng)
 		
 		
-	# switch l'authorisation du marathon
+	# switch l'authorisation du marathon evia Booléen
 	@commands.command(name='switch',descritpion='Authorisation marathon', brief='Athorisation Marathon')
 	async def switch(self, ctx):
 		if await self.is_admin(ctx):
 			self.auth = not self.auth 
 			await ctx.send('Statut Authorisation : ' + str(self.auth))
 	
-	# Marathon des enfer
+	# Marathon des enfers
 	@commands.command(
 	name='Marathon', 
-	description='Lancement Marathon', 
+	description='Lancement du Marathon', 
 	brief='Enclenchez le mécanisme de la terreur !')
 	async def Marathon(self, ctx):
-		# chack admin
+		# check admin
 		if not self.auth or not await self.is_admin(ctx):
 			await ctx.send("Non.")
 		else:
@@ -185,6 +189,8 @@ class EnferGastro(commands.Cog):
 		
 			await ctx.send('Petit Jesus a été vaincu ! Il reviendra peut-être dans un futur proche ...')
 			del self.Machine 
+
+	# Commandes pour stats du marathon
 
 	@commands.command(
 		name ='tempsMR',
@@ -218,6 +224,9 @@ def setup(bot):
 
 """ 
 Marathon
+
+Instance de marathon
+
 >>> Objet
  - Img :   Nombre d'image restante
  - duree : durée du marathon
