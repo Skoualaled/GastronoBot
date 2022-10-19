@@ -1,14 +1,9 @@
 import asyncio
-import json
-import os
 import random
-import string
 from datetime import datetime, timedelta
-
-import aiofiles
-import aiohttp
 import discord
 from discord.ext import commands
+
 """
 ----------------------------------------------------------
 EnferGastro 
@@ -19,11 +14,11 @@ Classe qui gère les marathons
  - auth 		(bool)		: booléen pour authorisation du marathon
  - NbImg		(int)		: Nombre d'image du marathon
  - data 		(liste)		: Contenu du json DB
- - duree 		(float/int)	: duree en heure du marathon
- - delai 		(float)		: delai entre les images du marathon (dépend de la durée)
+ - duree 		(float/int)	: durée en heure du marathon
+ - delai 		(float)		: délai entre les images du marathon (dépend de la durée)
  - admin 		(Admin)		: Instance d'Admin --> Voir Admin.py pour plus d'info
  - Machine 		(Marathon)	: instance de marathon
- - LastSend 	(int)		: Numréro de la dernière image envoyé (dans data)
+ - LastSend 	(int)		: Numéro de la dernière image envoyé (dans data)
 >>> Méthodes
  - get_delai 	(float)		: retourne le délai
  - get_nbimg 	(int)		: retourne le nombre d'image de DB
@@ -47,179 +42,195 @@ Classe qui gère les marathons
 
 
 class EnferGastro(commands.Cog):
-	def __init__(self, bot):
-		self.bot=bot
-		self.auth=False 
-		
-		self.data = bot.DB
-		
-		self.NbImg = len(self.data)
-		self.duree =10
-		self.delai = 10*3600 / len(self.data)
-		self.admin = bot.admin
-		self.Machine = None
-		self.LastSend = None
+    def __init__(self, bot):
+        self.bot = bot
+        self.auth = False
 
+        self.data = bot.DB
 
+        self.NbImg = len(self.data)
+        self.duree = 10
+        self.delai = 10 * 3600 / len(self.data)
+        self.admin = bot.admin
+        self.Machine = None
+        self.LastSend = None
 
-	# Getter qui servent après
-	def get_delai(self):
-		return round(self.delai,2)
+    # Getters qui servent après
+    def get_delai(self):
+        return round(self.delai, 2)
 
-	def get_nbimg(self):
-		return self.NbImg
+    def get_nbimg(self):
+        return self.NbImg
 
-	def get_auth(self):
-		return self.auth
+    def get_auth(self):
+        return self.auth
 
-	# change l'id de LastSend
-	def set_LastSend(self, id):
-		self.LastSend = id
+    # change l'id de LastSend
+    def set_lastsend(self, ident):
+        self.LastSend = ident
 
+    # Custom check pour certaines fonctions
+    # Vérifie que l'auteur du message dans ctx est dans la liste des admins d'Admin
+    async def is_admin(self, ctx):
+        return str(ctx.author.id) in self.admin.get_admins()
 
-	# Custom check pour certaines fonction
-	# Vérifie que l'auteur du message dans ctx est dans la liste des admins de Admin
-	async def is_admin(self, ctx):
-		return str(ctx.author.id) in self.admin.get_admins()
+    # Envoi message formatter selon type (image / lien) de DB.json
+    # Item (liste) : Objet du json
+    # id   (int)   : clé de l'objet json
+    async def gastro_message(self, ctx, _item, _ident):
+        self.set_lastsend(_ident)
+        if _item['type'] == 'image':
+            image_to_send = discord.File('Images\\' + _item['url'])
+            await ctx.send(file=image_to_send)
+        elif _item['type'] == 'lien':
+            await ctx.send(_item['url'])
+        else:
+            print('GastroMessage : Erreur de type pour la donnee ', _item)
 
-	
-	# Envoi message formatter selon type (image / lien) de DB.json
-	# Item (liste) : Objet du json
-	# id   (int)   : clé de l'bjet json
-	async def GastroMessage(self, ctx, Item, id):
-		self.set_LastSend(id)
-		if Item['type'] == 'image':
-			ImageToSend= discord.File('Images\\'+Item['url'])
-			await ctx.send(file=ImageToSend)
-		elif Item['type']=='lien':
-			await ctx.send(Item['url'])
-		else:
-			print('GastroMessage : Erreur de type pour la donnee ', Item)
+    # Info de la dernière image postée
+    @commands.command(
+        name='LFI',
+        brief='Information sur la dernière image posté (par moi)'
+    )
+    async def last_img_info(self, ctx):
+        if self.LastSend is None:
+            await ctx.send('Aucune Image en mémoire ...')
+        else:
+            item = self.data[self.LastSend]
+            await ctx.send('``` \nType : ' + item['type']
+                           + '\nNom/URL : < ' + item['url'] + ' > \n ```')
 
-    # Info de la dernière image posté
-	@commands.command(
-		name='LFI',
-		brief='Information sur la dernière image posté (par moi)'
-	)
-	async def LastImgInfo(self, ctx):
-		if self.LastSend == None:
-			await ctx.send('Aucune Image en mémoire ...')
-		else:
-			Item = self.data[self.LastSend]
-			await ctx.send('``` \nType : '+ Item['type']
-			+ '\nNom/URL : < ' + Item['url']+ ' > \n ```')
+    # Renvoi durée du marathon actuelle, ou défini une nouvelle durée si time est mis à 0
+    # time (int) :
+    # 	- None -> Renvoie les infos liées à la durée
+    #   - Sinon défini la durée en seconde
+    #   - Si le délai trop court ou si time n'est pas un entier, on envoie un message d'alerte (5 seconde en dur)
+    @commands.command(
+        name='duree',
+        brief='Renvoi ou défini duree marathon'
+    )
+    async def duree(self, ctx, _time=None):
+        if _time is None:
+            if self.duree > 1:
+                await ctx.send('Durée prévu du marathon : ' + str(self.duree) + ' Heures')
+            else:
+                await ctx.send('Durée prévu du marathon : ' + str(self.duree) + ' Heure')
+            await ctx.send('Délai entre chaque monstruosité : ' + str(self.get_delai()) + ' secondes')
+            return
+        else:
+            try:
+                temps = float(_time)
+            except ValueError:
+                await ctx.send('Il faut rentrer un nombre pour que ça marche ...')
+                return
+        if (temps* 3600 / self.NbImg) < 5:
+            await ctx.send(
+                'Bien essayé mais non. Je limite le délai entre chaque image à 5sec\nLa durée minimum que '
+                'j\'authorise est de {0} heures (calculé en onction du nombre d\'images)\nLe temps à mettre en '
+                'paramètre est en heures.'.format(
+                    str(round((self.NbImg * 5) / 3600, 2))))
+            return
 
-	# Renvoi durée du marathon actuelle, ou défini une nouvelle durée si time est mis à 0
-	# time (int) :
-	# 	- None -> Renvoie les info lié à la durée
-	#   - Sinon défini la durée en seconde
-	#   - Si le délai trop court ou si time n'est pas un entier on renvoi un message d'alerte (5 seconde en dur)
-	@commands.command(
-		name='Duree',
-		brief='Renvoi ou défini duree marathon'
-	)
-	async def Duree(self, ctx, time=None):
-		if time==None:
-			if self.duree > 1 :
-				await ctx.send('Duree prévu du marathon : ' + str(self.duree) + ' Heures')
-			else: 
-				await ctx.send('Duree prévu du marathon : ' + str(self.duree) + ' Heure')
-			await ctx.send('Délai entre chaque monstruosité : ' + str(self.get_delai()) + ' secondes')
-		elif (time * 3600 / self.NbImg) < 5:
-			await ctx.send('Bien essayé mais non. Je limite le délai entre chaque image à 5sec\nLa durée minimum que j\'authorise est de ' + str(round((self.NbImg * 5) / 3600),2)+ ' heures (calculé en onction du nombre d\'images)\nLe temps à mettre en paramètre est en heures.')
-		elif type(time) is str:
-			await ctx.send('Il faut rentrer un nombre pour que ça marche ...')
-		elif await self.is_admin(ctx):
-			self.duree = time
-			self.delai = time * 3600 / self.NbImg
-			if self.duree > 1 :
-				await ctx.send('Duree du marathon initialisé à ' + str(self.duree) + ' Heures')
-			else:
-				await ctx.send('Duree du marathon initialisé à ' + str(self.duree) + ' Heure')
-			await ctx.send('Délai entre chaque monstruosité : ' + str(self.get_delai()) + ' secondes')
+        elif await self.is_admin(ctx):
+            self.duree = temps
+            self.delai = temps * 3600 / self.NbImg
+            if self.duree > 1:
+                await ctx.send('Durée du marathon initialisé à ' + str(self.duree) + ' Heures')
+            else:
+                await ctx.send('Durée du marathon initialisé à ' + str(self.duree) + ' Heure')
+            await ctx.send('Délai entre chaque monstruosité : ' + str(self.get_delai()) + ' secondes')
+            return
 
-	# Infos générales :
-	# Authorisation du lancement du marathon, nombre d'images et délai
-	@commands.command(
-		name='getInfo',
-		brief='Infos marathon'
-	)
-	async def getInfo(self, ctx):
-		await ctx.send('``` \nAuth : ' + str(self.get_auth()) 
-		+'\nNb Img : '+ str(self.get_nbimg())
-		+ '\nDelai : ' + str(self.get_delai())+ '\n ```')
-	
+    # Infos générales :
+    # Authorisation du lancement du marathon, nombre d'images et délai
+    @commands.command(
+        name='get_info',
+        brief='Infos marathon'
+    )
+    async def get_info(self, ctx):
+        await ctx.send('``` \nAuth : ' + str(self.get_auth())
+                       + '\nNb Img : ' + str(self.get_nbimg())
+                       + '\nDélai : ' + str(self.get_delai()) + '\n ```')
 
-	#envoi objet random depuis DB 
-	@commands.command(name='oskour',
-                description='Vision d\'horreur aléatoire',
-                brief='( ͡° ͜ʖ ͡°)')
-	async def oskour(self, ctx):
-		rng = random.randint(0, self.NbImg)
-		Item = self.data[rng]
-		await self.GastroMessage(ctx, Item, rng)
-		
-		
-	# switch l'authorisation du marathon evia Booléen
-	@commands.command(name='switch',descritpion='Authorisation marathon', brief='Athorisation Marathon')
-	async def switch(self, ctx):
-		if await self.is_admin(ctx):
-			self.auth = not self.auth 
-			await ctx.send('Statut Authorisation : ' + str(self.auth))
-	
-	# Marathon des enfers
-	@commands.command(
-	name='Marathon', 
-	description='Lancement du Marathon', 
-	brief='Enclenchez le mécanisme de la terreur !')
-	async def Marathon(self, ctx):
-		# check admin
-		if not self.auth or not await self.is_admin(ctx):
-			await ctx.send("Non.")
-		else:
-			rng=random.sample(range(0, self.NbImg), self.NbImg) # liste randomisé des id des images
-			lkp=0 # lookup dans la liste
-			self.Machine = Marathon(self.NbImg, self.duree) # Init Machine
-			while self.auth and lkp <= self.NbImg -1: # auth pour permettre arrêt prématuré
-				item = self.data[rng[lkp]]
-				await self.GastroMessage(ctx, item, rng[lkp])
-				lkp+=1
-				self.Machine.avance()
-				await asyncio.sleep(self.delai) # attend x secondes
-		
-			await ctx.send('Petit Jesus a été vaincu ! Il reviendra peut-être dans un futur proche ...')
-			del self.Machine 
+    # envoi objet random depuis DB
+    @commands.command(name='oskour',
+                      description='Vision d\'horreur aléatoire',
+                      brief='( ͡° ͜ʖ ͡°)')
+    async def oskour(self, ctx):
+        rng = random.randint(0, self.NbImg)
+        item = self.data[rng]
+        await self.gastro_message(ctx, item, rng)
 
-	# Commandes pour stats du marathon
+    # switch l'authorisation du marathon via Booléen
+    @commands.command(name='switch', description='Authorisation marathon', brief='Authorisation Marathon')
+    async def switch(self, ctx):
+        if await self.is_admin(ctx):
+            self.auth = not self.auth
+            await ctx.send('Statut Authorisation : ' + str(self.auth))
 
-	@commands.command(
-		name ='tempsMR',
-		brief='Temps restant du marathon (si en cours)'
-	)
-	async def tempsMR(self, ctx):
-		if self.Machine != None:
-			await ctx.send(self.Machine.TempsRestant())
+    # Marathon des enfers
+    @commands.command(
+        name='marathon',
+        description='Lancement du Marathon',
+        brief='Enclenchez le mécanisme de la terreur !')
+    async def marathon(self, ctx):
+        # check admin
+        if not self.auth or not await self.is_admin(ctx):
+            await ctx.send("Non.")
+        else:
+            rng = random.sample(range(0, self.NbImg), self.NbImg)  # liste randomisée des id des images
+            lkp = 0  # lookup dans la liste
+            self.Machine = Marathon(self.NbImg, self.duree)  # Init Machine
+            while self.auth and lkp <= self.NbImg - 1:  # auth pour permettre arrêt prématuré
+                item = self.data[rng[lkp]]
+                await self.gastro_message(ctx, item, rng[lkp])
+                lkp += 1
+                self.Machine.avance()
+                await asyncio.sleep(self.delai)  # attend x secondes
 
-	@commands.command(
-		name='tempsME',
-		brief='Temps écoulé du marathon (si en cours)'
-	)
-	async def tempsME(self, ctx):
-		if self.Machine != None:
-			await ctx.send(self.Machine.TempsEcoule())
+            await ctx.send('Petit Jesus a été vaincu ! Il reviendra peut-être dans un futur proche ...')
+            del self.Machine
 
-	@commands.command(
-		name='imgM',
-		brief='Nombre d\'image restante du marathon (si en cours)'
-	)
-	async def avanceM(self, ctx):
-		if self.Machine != None:
-			await ctx.send(self.Machine.ImgRestant())
-	
+        # Commandes pour stats du marathon
+
+    @commands.command(
+        name='tempsMR',
+        brief='Temps restant du marathon (si en cours)'
+    )
+    async def tempsMR(self, ctx):
+        if self.Machine is not None:
+            await ctx.send(self.Machine.temps_restant())
+
+    @commands.command(
+        name='tempsME',
+        brief='Temps écoulé du marathon (si en cours)'
+    )
+    async def tempsME(self, ctx):
+        if self.Machine is not None:
+            await ctx.send(self.Machine.temps_ecoule())
+
+    @commands.command(
+        name='imgM',
+        brief='Nombre d\'image restante du marathon (si en cours)'
+    )
+    async def avanceM(self, ctx):
+        if self.Machine is not None:
+            await ctx.send(self.Machine.img_restant())
+
+    @commands.command(
+        name='DEBUG',
+        brief='fonction modulable pour test',
+        hidden='True'
+    )
+    async def debug(self, ctx):
+        if not await self.is_admin(ctx):
+            await ctx.send("Bien essayé petit margoulin...")
+        else:
+            await ctx.send('Ceci est un test')
 
 
 def setup(bot):
-	bot.add_cog(EnferGastro(bot))
+    bot.add_cog(EnferGastro(bot))
 
 
 """ 
@@ -239,25 +250,25 @@ Instance de marathon
  - TempsEcoule: Retourne le temps restant du marathon
 
  """
+
+
 class Marathon:
 
-	def __init__(self, liste, duree):
-		self.Img = liste
-		self.duree = duree
-		self.start = datetime.now()
+    def __init__(self, liste, _duree):
+        self.Img = liste
+        self.duree = _duree
+        self.start = datetime.now()
 
-	# fait avancé le marathon d'une image
-	def avance(self):
-		self.Img-=1
-	
-	def TempsRestant(self):
-		return timedelta(hours=self.duree) - (datetime.now() - self.start)
+    # fait avancer le marathon d'une image
+    def avance(self):
+        self.Img -= 1
 
-	def ImgRestant(self):
-		return self.Img
+    def temps_restant(self):
+        return timedelta(hours=self.duree) - (datetime.now() - self.start)
 
-	def TempsEcoule(self):
-		now = datetime.now()
-		return now - self.start
-	
+    def img_restant(self):
+        return self.Img
 
+    def temps_ecoule(self):
+        now = datetime.now()
+        return now - self.start

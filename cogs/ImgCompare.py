@@ -1,10 +1,12 @@
-import cv2, os
-import numpy as np
+import cv2
+import os
+
+# import numpy as np
 
 """"
 Compare les images de ImagesTMP à celle de Image pour vérifier si ce sont des doublons
 A lancer à la main
-Necessite de recharger la DB du gastronobot
+Nécessite de recharger la DB du gastronobot
 A mettre dans le Bot plus tard 
 """
 
