@@ -48,6 +48,9 @@ class DBManager(commands.Cog):
     @commands.command()
     async def reload_DB(self, ctx):
         self.maj_DB()
+        gastro = self.bot.get_cog('EnferGastro')
+        if gastro is not None:
+            gastro.reload_infos()
         await ctx.send("DB rechargé")
 
     # Créé une DB à partir du dossier d'images + json de lien

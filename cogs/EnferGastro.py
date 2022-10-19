@@ -69,6 +69,11 @@ class EnferGastro(commands.Cog):
     def set_lastsend(self, ident):
         self.LastSend = ident
 
+    def reload_infos(self):
+        self.data = self.bot.DB
+        self.NbImg = len(self.data)
+        self.delai = 10 * 3600 / len(self.data)
+
     # Custom check pour certaines fonctions
     # Vérifie que l'auteur du message dans ctx est dans la liste des admins d'Admin
     async def is_admin(self, ctx):
