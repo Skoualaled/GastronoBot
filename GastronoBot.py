@@ -37,16 +37,19 @@ bot.load_extension('cogs.DBManager')
 bot.load_extension('cogs.EnferGastro')
 
 
-# ---------------------------- OFF ------------------------------
-@bot.command(name='off')
+# ---------------------------- commandes gestion ------------------------------
+@bot.command(name='off', hidden='True')
+@commands.is_owner()
 async def turnoff(ctx):
     if str(ctx.author.id) in bot.admin.get_admins():
         await ctx.send('Bonne nuit !')
         await bot.logout()
         print('BOT STOPPED')
+    else:
+        await ctx.send('Non.')
 
 
-@bot.command()
+@bot.command(hidden='True')
 @commands.is_owner()
 async def reload(ctx, extension):
     bot.reload_extension(f"cogs.{extension}")

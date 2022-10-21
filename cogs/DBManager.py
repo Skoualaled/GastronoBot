@@ -5,6 +5,8 @@ import string
 
 import aiofiles
 import aiohttp
+import cv2
+import discord
 from discord.ext import commands
 
 """ 
@@ -27,6 +29,38 @@ DBManager : Gestion de la base de donnée
  """
 
 
+def process_img():
+    images_tmp = os.listdir('ImagesTMP')
+    images_db = os.listdir('Images')
+    nb_new = 0
+    for img in images_tmp:
+
+        img_test = cv2.imread('ImagesTMP/' + img)
+        print('Image test : ' + img)
+        old = False
+        for imgDB in images_db:
+            if imgDB.split('.')[1] != 'gif':
+                img_comp = cv2.imread('Images/' + imgDB)
+                if img_comp.shape == img_test.shape:
+                    diff = cv2.subtract(img_comp, img_test)
+                    b, g, r = cv2.split(diff)
+                    if cv2.countNonZero(b) == 0 and cv2.countNonZero(g) == 0 and cv2.countNonZero(r) == 0:
+                        print("OLD")
+                        old = True
+                        break
+        if not old:
+            os.rename('ImagesTMP/' + img, 'Images/' + img)
+            nb_new += 1
+        else:
+            os.remove('ImagesTMP/' + img)
+    return nb_new
+
+
+def random_name():
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for _ in range(15))
+
+
 class DBManager(commands.Cog):
 
     def __init__(self, bot):
@@ -35,26 +69,7 @@ class DBManager(commands.Cog):
         self.DB = bot.DB
         self.admin = bot.admin
 
-    async def cog_check(self, ctx):
-        return str(ctx.author.id) in self.admin.get_admins()
-
-    # Recharge le fichier d'admin
-    @commands.command()
-    async def reload_admin(self, ctx):
-
-        await self.admin.reload_admin(ctx, self.bot)
-
-    # Recharge DB
-    @commands.command()
-    async def reload_DB(self, ctx):
-        self.maj_DB()
-        gastro = self.bot.get_cog('EnferGastro')
-        if gastro is not None:
-            gastro.reload_infos()
-        await ctx.send("DB rechargé")
-
     # Créé une DB à partir du dossier d'images + json de lien
-    # @commands.command(name='MajDB')
     def maj_DB(self):
         jsonfile = open('data/Liens.json')
         data = json.load(jsonfile)
@@ -68,12 +83,12 @@ class DBManager(commands.Cog):
             item = {'url': Img, 'type': 'image'}
             data.append(item)
 
-        jsonfile = open('data\\DB.json', 'w')
+        jsonfile = open('data/DB.json', 'w')
         jsonfile.write(json.dumps(data, indent=4, sort_keys=True))
         # self.bot.DB = json.load(jsonfile)
         jsonfile.close()
 
-        jsontmp = open('data\\DB.json')
+        jsontmp = open('data/DB.json')
         self.bot.DB = json.load(jsontmp)
         jsontmp.close()
 
@@ -82,7 +97,7 @@ class DBManager(commands.Cog):
     # Sur upload d'une image, on la DL dans ImagesTMP
     @commands.Cog.listener()
     async def on_message(self, _message):
-        if _message.author == self.bot.user:
+        if _message.author == self.bot.user or _message.channel.name != ("gastrotest"):
             return
 
         if len(_message.attachments) > 0:
@@ -93,15 +108,40 @@ class DBManager(commands.Cog):
                     if resp.status == 200:
                         assert resp.headers
                         type_image = url.split('.')[-1]
-                        image_name = self.random_name() + '.' + type_image
-                        f = await aiofiles.open('ImagesTMP\\' + image_name, mode='wb')
+                        image_name = random_name() + '.' + type_image
+                        f = await aiofiles.open('ImagesTMP/' + image_name, mode='wb')
                         await f.write(await resp.read())
 
-    # Nom aléatoire 
-    @staticmethod
-    def random_name():
-        letters = string.ascii_lowercase
-        return ''.join(random.choice(letters) for _ in range(15))
+    # Recharge le fichier d'admin
+    @commands.command(name='reloadAdmin', hidden='True')
+    async def reload_admin(self, ctx):
+        if str(ctx.author.id) in self.admin.get_admins():
+            await self.admin.reload_admin(ctx, self.bot)
+
+    # Recharge DB
+    @commands.command(name='reloadDB', hidden='True')
+    async def reload_db(self, ctx):
+        if str(ctx.author.id) not in self.admin.get_admins():
+            return
+
+        self.maj_DB()
+        gastro = self.bot.get_cog('EnferGastro')
+        if gastro is not None:
+            gastro.reload_infos()
+        embed = discord.Embed(title='Base rechargée', colour=0x9634D8)
+        await ctx.send(embed=embed)
+
+    @commands.command(name='ProcessNew', hidden='True')
+    @commands.is_owner()
+    async def process_new(self, ctx):
+        msg = 'Le chargement de nouvelles images prend du temps. Les commandes seront indisponible jusqu\'à la fin ' \
+              'du chargement.'
+        await ctx.send(embed=discord.Embed(title='Merci de patienter', description=msg))
+        nb = process_img()
+        msg = f'{nb} nouvelle(s) image(s).\nRechargement de la base'
+        embed = discord.Embed(title='Nouvelles Images', description=msg, colour=0x9634D8)
+        await ctx.send(embed=embed)
+        await self.reload_db(ctx)
 
 
 def setup(bot):
